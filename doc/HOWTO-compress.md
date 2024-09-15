@@ -4,17 +4,20 @@ _Compression_ means producing a more compact representation of
 something.  Compression may be specialized to a 
 certain kind of data 
 (e.g., image compression) or it may be more general purpose.  
-Decompression is the inverse operation, but decompressing after a 
-_lossy_ compression (e.g., JPEG, MPEG) may produce only an 
-approximation of the original data before compression.  
-Decompressing the representation produced by a _lossless_ 
-compression produces an exact copy of the original. 
+_Decompression_ is the reverse of compression, converting from a 
+compressed 
+representation to the original format.  We call a compression
+_lossy_ if decompression produces an approximation of the original, 
+or _lossless_ if decompression is a true inverse that produces an 
+exact copy of the original.  JPEG for images and MPEG 
+for audio and video, for example, support  _lossy_ compression. 
+The ZIP file format supports _lossless_ compression.
 
 All compression techniques identify and exploit _redundancy_ in data.
 Redundancy can be thought of as information in part of the data that 
 can be used to predict other parts of the data.  The opposite of 
 redundancy is _entropy_, the amount of information needed to 
-oredict some part of a data set.  Entropy is measured in _bits_, 
+predict some part of a data set.  Entropy is measured in _bits_, 
 which are related to (but distinct from) the binary digits 
 used to represent information in computer memory.  
 
@@ -43,7 +46,7 @@ abbreviated
 We can represent each word as a pair:  An integer indicating how 
 many initial letters it shares with the word before, and a string 
 providing the remaining letters.  If the short sequence above were 
-the whole word list, it might be encoded as 
+the whole word list, it might be encoded as:
 
 ```text
 0,abate
@@ -59,11 +62,12 @@ the whole word list, it might be encoded as
 
 While we could represent shared prefixes textually as shown above, 
 such as "4," or "10,", we can do much better by recognizing that 
-shared prefixes are usually short.  A shared prefix longer than 24 
-should be very rare.  If we encode prefixes limited to 24, we could 
-use letters A..Z to represent 0..24, we can use one string to 
-represent both the shared prefix and the remaining letters. So we 
-might represent the list above as  
+shared prefixes are usually short.  A shared prefix longer than 25 
+is very rare.  If we encode prefixes limited to 24, we could 
+use letters A..Z to represent 0..25, we can use one string to 
+represent both the shared prefix and the remaining letters. So, 
+using `A` to represent 0, `B` to represent 1, etc.,  we 
+might represent the list above as:
 
 ```text
 Aabate
@@ -113,30 +117,37 @@ won't worry about the performance impact of encoding only the first 25.
 
 ## Order of development
 
-I have provided a main program, `pfc.py`, which will compress or 
-decompress an input file depending on whether it is invoked like this
+I have provided a main program, which will compress or 
+decompress an input file depending on how it is invoked.  `pfc` 
+is short for "prefix compressor".  If invoked like this: 
 
 ```commandline
 python3 pfc.py compress data/sample.txt  data/compressed.txt
 ```
-or like this 
+it compresses `sample.txt` to produce `compressed.txt`.  If invoked 
+like this this:  
 
 ```commandline
 python3 pfc.py expand data/compressed.txt  data/restored.txt
 ```
+it expands `compressed.txt` to recover an exact copy of `sample.txt` 
+in file `restored.txt`.
 
 Program `pfc.py` performs the compression and expansion by calling 
 functions in `codec.py`, the source file you will produce.
 "[Codec](https://en.wikipedia.org/wiki/Codec)" is short for 
 "coder/decoder", jargon for a matching pair of transformations that 
 convert from one representation to another ("encode") and from 
-the second back to the first ("decode").  Codecs you may be familiar 
+the compressed representation back to the original ("decode").
+Codecs you may be familiar 
 with include [MP3](https://en.wikipedia.org/wiki/MP3)
 (between an audio signal and a compressed digital 
 representation) and  [JPEG](https://en.wikipedia.org/wiki/JPEG) for 
-images, both of which are lossy.  Your codec will provide _lossless_ 
+images, both of which are lossy.  
+
+Your codec will provide _lossless_ 
 pair of functions, `encode` and `decode`, meaning they will be 
-inverses of each other.  That is, you will ensure that 
+inverses of each other.  You will ensure that 
 $decode(encode(s,x), x) = s$. The _x_ in this equation will be the 
 immediately preceding word in the word list.  The redundancy we are 
 exploiting to compress data is the similarity between _s_ and _x_.
@@ -161,12 +172,14 @@ if __name__ == "__main__":
 
 
 To build the encoder, we will need to 
+
 - determine the length of the shared prefix of _s_, the string to be 
   encoded, and prior word in the word list.
 - represent that shared prefix compactly as a single character
 - combine the resulting character with the remainder of _s_
 
 To build the decoder, we will need to 
+
 - break the encoded string _s_ into the single character indication 
   of its shared prefix and the remainder, which we'll call the 
   _suffix_. 
@@ -219,11 +232,18 @@ if I'm being honest, that is what I did first.   But that sloppiness
 violates our coding guideline against "magic numbers".  A better 
 approach is to isolate these representation choices in a few 
 symbolic constants near the beginning of the module, just 
-after any `import` statements.  Since they will be global to the 
+after any `import` statements.
+Since they will be global to the 
 module, we will write them in "all caps", and since they are 
 strictly internal to this module, we will begin them with a single 
-underscore.  Also, since they are fairly far from some of the 
-functions that use them, we'll give them long descriptive names. 
+underscore, as prescribed in the Python style guide known as
+[PEP 8](https://peps.python.org/pep-0008/#naming-conventions).
+Also, since they are fairly far from 
+some of the 
+functions that use them,
+we'll give them long
+[descriptive names](
+https://uo-cs-oer.github.io/CS210-text/02-Functions/02-03-Hygiene.html#names-matter).
 
 
 ```python
@@ -250,10 +270,24 @@ def encode_length(n: int) -> str:
     return 'Z'   # FIXME
 ```
 
+We call the requirement that `n` be between 0 and 25 a 
+_precondition_ of the function.  The limit of 25 is a _checked 
+precondition_, i.e., we design the function to intentionally crash 
+if the precondition is violated.  It is checked with an `assert` 
+statement.  The first clause of `assert` statement is the 
+_assertion_ of the precondition.  The second part (after the comma) 
+is an error message that will be printed if the assertion is 
+violated. Assertions are for catching errors _made by programmers_, 
+not errors made by users of the software.  The error message is 
+therefore addressed to a programmer who is debugging the code.  That 
+is why it is appropriate to mention that the symbolic constant that 
+has been exceeded. 
+
 My implementation of `encode_length` is a single line of Python code 
 that uses the built-in functions `chr` and `ord`.  You might 
 reasonably ask why I bother to write a Python function for a single 
 line of code.   There are a couple of reasons: 
+
 - The name `encode_length` is clearer than the line of code that 
   implements it.  It will make our `encode` and `decode` functions 
   more readable, and in particular the relation between 
@@ -309,6 +343,7 @@ def encode(s: str, predictor: str) -> str:
 Recall our plan [above](#building-the-codec) for encoding.  We now 
 have the tools we need to build the `encode` function with just a 
 few lines of code. 
+
 - `shared_prefix_length(s, predictor)` gives us the length of the 
   shared prefix.  Although we will rarely encounter a shared prefix 
   that is too long to be encoded, we should play it safe by taking 
@@ -324,7 +359,8 @@ few lines of code.
 
 The body of my `encode` function is just three lines of Python code, 
 corresponding closely to the three steps of
-[the plan](#building-the-codec).  Feel free to expand it to a few 
+[the plan](#building-the-codec) we made at the outset of this
+project.  Feel free to expand it to a few 
 more lines, but if you find yourself writing any complex logic, even 
 an `if` statement, then you are probably on the wrong track. 
 
@@ -384,6 +420,7 @@ and send the output to the screen this way:
 ```commandline
 python3 pfc.py expand data/compressed.txt
 ```
+
 The output should look like this, and should be identical to 
 `data/sample.txt`: 
 
@@ -409,6 +446,7 @@ python3 pfc.py compress data/dict.txt data/compressed.txt
 storage.  `data/compressed.txt` produced as shown above occupies 206 
 kilobytes of storage, or about 45% less.   Not bad for a simple 
 codec that a beginning Python programmer can build and understand!  
+
 More sophisticated codecs used in production software use similar 
 principles, but with more complex ways of predicting the next chunk 
 of data and representing only how the actual data differs from the 
